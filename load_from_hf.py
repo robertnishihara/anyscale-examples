@@ -1,40 +1,11 @@
-import fsspec.implementations.http
+import ray
 import datasets
+import os
 from huggingface_hub import HfFileSystem, HfApi, DatasetCardData
 import os
-import requests
-import ray
 
 
-def validate_arguments(dataset_name, subset, split, headers):
-    # Check if the dataset repository exists.
-    response = requests.get(
-        f"https://huggingface.co/api/datasets/{dataset_name}",
-        headers=headers
-    ).json()
-    if "error" in response:
-        raise Exception(f"Dataset repository doesn't exist. Error: {response}")
-
-    # Check if the dataset supports parquet.
-    response = requests.get(
-        f"https://huggingface.co/api/datasets/{dataset_name}/parquet",
-        headers=headers
-    ).json()
-    if "error" in response:
-        raise Exception(f"Dataset repository doesn't support parquet. Error: {response}")
-    if len(response) == 0:
-        raise Exception(f"Dataset repository doesn't appear to support parquet. Error: {response}")
-
-    # Check overall dataset generation.
-    response = requests.get(
-        f"https://huggingface.co/api/datasets/{dataset_name}/parquet/{subset}/{split}",
-        headers=headers
-    ).json()
-    if "error" in response:
-        raise Exception(f"Dataset generation failed: {response}")
-
-
-def retrieve_data_files(dataset_name, revision=None, data_dir=None, data_files=None, token=None):
+def retrieve_hf_data_files(dataset_name, split=None, revision=None, data_dir=None, data_files=None, token=None):
     hfh_dataset_info = HfApi("https://huggingface.co").dataset_info(
         dataset_name,
         revision=revision,
@@ -47,7 +18,6 @@ def retrieve_data_files(dataset_name, revision=None, data_dir=None, data_files=N
 
     dataset_card_data = DatasetCardData()
     metadata_configs = datasets.utils.metadata.MetadataConfigs.from_dataset_card_data(dataset_card_data)
-
 
     # we need a set of data files to find which dataset builder to use
     # because we need to infer module name by files extensions
@@ -63,51 +33,7 @@ def retrieve_data_files(dataset_name, revision=None, data_dir=None, data_files=N
         allowed_extensions=datasets.load.ALL_ALLOWED_EXTENSIONS,
         # download_config=self.download_config,
     )
-    return data_files
-
-
-def load_from_hf(dataset_name, subset, split):
-    token = os.environ["HF_TOKEN"]
-    fs = HfFileSystem(token=token)
-    headers = {
-        "Authorization": f"Bearer {token}"
-    }
-
-    validate_arguments(dataset_name, subset, split, headers)
-
-    file_urls = retrieve_urls(dataset_name, subset, split)
-
-    print("FILE URLS")
-    print(file_urls)
-
-    ds = ray.data.read_parquet(
-        file_urls,
-        filesystem=fs,
-    )
-
-    return ds
-
-
-def load_from_hf_old_version(dataset_name, subset, split):
-    token = os.environ["HF_TOKEN"]
-    headers = {
-        "Authorization": f"Bearer {token}"
-    }    
-
-    validate_arguments(dataset_name, subset, split, headers)
-
-    file_urls = requests.get(
-        f"https://huggingface.co/api/datasets/{dataset_name}/parquet/{subset}/{split}",
-        headers=headers
-    ).json()
-
-    fs = fsspec.implementations.http.HTTPFileSystem()
-
-    ds = ray.data.read_parquet(
-        file_urls,
-        filesystem=fs,
-    )
-    return ds
+    return data_files[split]
 
 
 token = os.environ["HF_TOKEN"]
@@ -138,27 +64,11 @@ dataset_name, data_dir, split = "rotten_tomatoes", None, "train"
 dataset_name, data_dir, split = "teknium/OpenHermes-2.5", None, "train"  # Some issue with reading json
 dataset_name, data_dir, split = "HuggingFaceFV/finevideo", None, "train"
 
-data_files = retrieve_data_files(dataset_name, revision=None, data_dir=data_dir, data_files=None, token=token)[split]
-print(data_files)
-print(len(data_files))
-
-if data_files[0].endswith("parquet"):
-    format = "parquet"
-elif data_files[0].endswith("json"):
-    format = "json"
-else:
-    raise Exception("Unsupported data format")
-
-
-import time
-start = time.time()
+data_files = retrieve_hf_data_files(dataset_name, data_dir=data_dir, split=split)
 
 ds = ray.data.read_parquet(
-    data_files[:500],
-    # concurrency=100,
+    data_files[:300],
     filesystem=HfFileSystem(token=token),
 )
 
 print(ds.count())
-
-print("elapsed: ", time.time() - start)

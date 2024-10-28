@@ -33,3 +33,17 @@ def retrieve_hf_data_files(dataset_name, split=None, revision=None, data_dir=Non
         # download_config=self.download_config,
     )
     return data_files[split]
+
+
+dataset_name, data_dir, split = "HuggingFaceFV/finevideo", None, "train"
+
+
+token = os.environ["HF_TOKEN"]
+HfFileSystem(token=token)
+data_files = retrieve_hf_data_files(dataset_name, data_dir=data_dir, split=split)
+
+ds = ray.data.read_parquet(
+    data_files[:500],
+    # concurrency=100,
+    filesystem=HfFileSystem(token=token),
+)
