@@ -66,19 +66,6 @@ def retrieve_data_files(dataset_name, revision=None, data_dir=None, data_files=N
     return data_files
 
 
-    """
-    fs = HfFileSystem(token=token)
-    # base_path = f"hf://datasets/{dataset_name}@{revision}/{data_dir or ''}".rstrip("/")
-    file_urls = fs.ls(f"datasets/{dataset_name}/data", detail=False)
-    file_urls = [f"hf://{item}" for item in file_urls]
-    """
-
-    return file_urls
-
-# def select_subset_and_split(file_urls, dataset_name, subset, split):
-#     
-
-
 def load_from_hf(dataset_name, subset, split):
     token = os.environ["HF_TOKEN"]
     fs = HfFileSystem(token=token)
@@ -148,20 +135,30 @@ dataset_name, data_dir, split = "nvidia/OpenMathInstruct-2", None, "train"
 dataset_name, data_dir, split = "allenai/c4", "en", "train"
 dataset_name, data_dir, split = "PolyAI/minds14", "en-US", "train"  # Doesn't support Parquet, weird directory structure
 dataset_name, data_dir, split = "rotten_tomatoes", None, "train"
+dataset_name, data_dir, split = "teknium/OpenHermes-2.5", None, "train"  # Some issue with reading json
 dataset_name, data_dir, split = "HuggingFaceFV/finevideo", None, "train"
 
 data_files = retrieve_data_files(dataset_name, revision=None, data_dir=data_dir, data_files=None, token=token)[split]
 print(data_files)
 print(len(data_files))
 
+if data_files[0].endswith("parquet"):
+    format = "parquet"
+elif data_files[0].endswith("json"):
+    format = "json"
+else:
+    raise Exception("Unsupported data format")
+
+
 import time
 start = time.time()
 
 ds = ray.data.read_parquet(
-    data_files,
-    concurrency=100,
+    data_files[:500],
+    # concurrency=100,
     filesystem=HfFileSystem(token=token),
 )
+
 print(ds.count())
 
 print("elapsed: ", time.time() - start)
