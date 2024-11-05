@@ -37,19 +37,8 @@ def retrieve_hf_data_files(dataset_name, split=None, revision=None, data_dir=Non
 
 
 token = os.environ["HF_TOKEN"]
-
 dataset_name, data_dir, split = "MLCommons/unsupervised_peoples_speech", None, "train"
-
-# "https://huggingface.co/datasets/MLCommons/unsupervised_peoples_speech/resolve/main/audio/000001.tar?download=true"
-
 data_files = retrieve_hf_data_files(dataset_name, data_dir=data_dir, split=split)
-
-# file_paths = [f"https://huggingface.co/datasets/{data_file[14:]}" for data_file in data_files]
-# file_path = file_paths[0]
-
-# headers = {
-#     "Authorization": f"Bearer {token}"
-# }
 
 ds = ray.data.read_binary_files(
     data_files[:1],
