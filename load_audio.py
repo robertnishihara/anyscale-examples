@@ -82,6 +82,23 @@ def set_sampling_rate(row):
     return row
 
 
+def chunk_audio(row):
+    audio = row["audio"]
+    filename = row["filename"]
+    chunk_duration_ms = 30 * 1000  # 30 seconds in milliseconds
+    chunks = []
+
+    # Split audio into chunks of 30 seconds or less.
+    for i in range(0, len(audio), chunk_duration_ms):
+        chunk = audio[i:i + chunk_duration_ms]
+        chunks.append({
+            "audio_chunk": chunk,
+            "filename": f"{filename}_chunk_{i // chunk_duration_ms}"
+        })
+    
+    return chunks
+
+
 token = os.environ["HF_TOKEN"]
 dataset_name, data_dir, split = "MLCommons/unsupervised_peoples_speech", None, "train"
 data_files = retrieve_hf_data_files(dataset_name, data_dir=data_dir, split=split)
@@ -99,3 +116,6 @@ materialized_ds = ds.materialize()
 new_ds = materialized_ds.flat_map(process_tarfile)
 new_ds = new_ds.map(set_sampling_rate)
 new_ds = new_ds.materialize()
+
+result_ds = new_ds.flat_map(chunk_audio)
+result_ds = result_ds.materialize()
