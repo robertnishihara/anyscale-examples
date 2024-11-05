@@ -3,7 +3,9 @@ import datasets
 import os
 from huggingface_hub import HfFileSystem, HfApi, DatasetCardData
 import requests
-
+import tarfile
+import io
+import pydub
 
 def retrieve_hf_data_files(dataset_name, split=None, revision=None, data_dir=None, data_files=None, token=None):
     hfh_dataset_info = HfApi("https://huggingface.co").dataset_info(
@@ -36,47 +38,25 @@ def retrieve_hf_data_files(dataset_name, split=None, revision=None, data_dir=Non
     return data_files[split]
 
 
-token = os.environ["HF_TOKEN"]
-dataset_name, data_dir, split = "MLCommons/unsupervised_peoples_speech", None, "train"
-data_files = retrieve_hf_data_files(dataset_name, data_dir=data_dir, split=split)
-
-ds = ray.data.read_binary_files(
-    data_files[:1],
-    filesystem=HfFileSystem(token=token),
-)
-
-def parse_filename(row: Dict[str, Any]) -> Dict[str, Any]:
-    row["filename"] = os.path.basename(row["path"])
-    return row
-
-def file_path_to_audio_files(file_path):
+def extract_audio_objects_from_tar(tarfile_bytes):
     # This function does the following:
     # - Take a file path and retrieve the file (it's a .tar file)
     # - Untar the file (it contains a bunch of directories filled with .mp3 files and some other miscellaneous files)
     # - Read through the directories and return all of the .mp3 files along with the directory that the files came from
-    result = requests.get(file_path, headers=headers)
-
-
-materialized_ds = ds.materialize()
-
-print(ds.count())
-
-######
-info = ds.take_all()
-raw = info[0]["bytes"]
-
-import tarfile
-import io
-import pydub
-
-
-def extract_audio_objects_from_tar(tarfile_bytes):
     audio_objects = []
+    filenames = []
+
+    counter = 0
 
     # Open the byte string as a tar file
     with tarfile.open(fileobj=io.BytesIO(tarfile_bytes)) as tar:
         # Iterate through each file in the tar archive
         for member in tar.getmembers():
+
+            if counter == 10:
+                break
+            counter += 1
+
             # Check if the file is an MP3
             if member.isfile() and member.name.endswith(".mp3"):
                 try:
@@ -84,11 +64,38 @@ def extract_audio_objects_from_tar(tarfile_bytes):
                     file_data = tar.extractfile(member).read()
                     audio_obj = pydub.AudioSegment.from_file(io.BytesIO(file_data), format="mp3")
                     audio_objects.append(audio_obj)
+                    filenames.append(member.name)
                 except pydub.exceptions.CouldntDecodeError:
                     print(f"Ignoring: {member.name} (Could not decode)")
             else:
                 print(f"Ignoring: {member.name} (Not mp3)")
 
-    return audio_objects
+    return [{"audio": audio, "filename": filename} for audio, filename in zip(audio_objects, filenames)]
 
-audio_objects = extract_audio_objects_from_tar(raw)
+
+def process_tarfile(row):
+    return extract_audio_objects_from_tar(row["bytes"])
+
+
+def set_sampling_rate(row):
+    row["audio"] = row["audio"].set_frame_rate(16000)
+    return row
+
+
+token = os.environ["HF_TOKEN"]
+dataset_name, data_dir, split = "MLCommons/unsupervised_peoples_speech", None, "train"
+data_files = retrieve_hf_data_files(dataset_name, data_dir=data_dir, split=split)
+
+ds = ray.data.read_binary_files(
+    data_files[:2],
+    filesystem=HfFileSystem(token=token),
+)
+
+materialized_ds = ds.materialize()
+# info = ds.take_all()
+# raw = info[0]["bytes"]
+# audio_objects = extract_audio_objects_from_tar(raw)
+
+new_ds = materialized_ds.flat_map(process_tarfile)
+new_ds = new_ds.map(set_sampling_rate)
+new_ds = new_ds.materialize()
