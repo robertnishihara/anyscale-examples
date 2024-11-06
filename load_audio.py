@@ -1,3 +1,4 @@
+from typing import Dict
 import ray
 import datasets
 import os
@@ -6,6 +7,13 @@ import requests
 import tarfile
 import io
 import pydub
+import numpy as np
+import torch
+import whisper
+
+SAMPLING_RATE = 16000
+CHUNK_SIZE_SECONDS = 30
+NUM_CHANNELS = 1
 
 def retrieve_hf_data_files(dataset_name, split=None, revision=None, data_dir=None, data_files=None, token=None):
     hfh_dataset_info = HfApi("https://huggingface.co").dataset_info(
@@ -77,18 +85,18 @@ def process_tarfile(row):
     return extract_audio_objects_from_tar(row["bytes"])
 
 
-def set_sampling_rate(row):
-    row["audio"] = row["audio"].set_frame_rate(16000)
+def set_sampling_rate_and_channels(row):
+    row["audio"] = row["audio"].set_frame_rate(SAMPLING_RATE).set_channels(NUM_CHANNELS)
     return row
 
 
 def chunk_audio(row):
     audio = row["audio"]
     filename = row["filename"]
-    chunk_duration_ms = 30 * 1000  # 30 seconds in milliseconds
+    chunk_duration_ms = CHUNK_SIZE_SECONDS * 1000  # CHUNK_SIZE_SECONDS in milliseconds
     chunks = []
 
-    # Split audio into chunks of 30 seconds or less.
+    # Split audio into chunks of CHUNK_SIZE_SECONDS seconds or less.
     for i in range(0, len(audio), chunk_duration_ms):
         chunk = audio[i:i + chunk_duration_ms]
         chunks.append({
@@ -97,6 +105,60 @@ def chunk_audio(row):
         })
     
     return chunks
+
+
+def audio_to_numpy(row):
+    # Do we need the audio_chunk anymore or can we drop that here?
+    audio_chunk = row["audio_chunk"]
+    sample = np.array(audio_chunk.get_array_of_samples()).astype(np.float32)
+    max_value = float(2 ** (audio_chunk.sample_width * 8 - 1))
+    sample = sample / max_value
+
+    # Pad the numpy array so they all have the same length. This might be a bad idea.
+    target_length = CHUNK_SIZE_SECONDS * SAMPLING_RATE * NUM_CHANNELS
+    if len(sample) < target_length:
+        sample = np.pad(sample, (0, target_length - len(sample)), mode="constant", constant_values=0)
+
+    row["numpy"] = sample
+    return row
+
+
+class WhisperPredictor:
+    def __init__(self):
+        self.model = whisper.load_model("base").to("cuda")  # Can be "small", "medium", etc.
+
+    def __call__(self, batch: Dict[str, np.ndarray]) -> Dict[str, np.ndarray]:
+        inputs = torch.as_tensor(
+            batch["numpy"],
+            dtype=torch.float32,
+            device="cuda"
+        )
+        audio_tensor = torch.tensor(inputs)
+
+        with torch.no_grad():
+            mel = whisper.log_mel_spectrogram(audio_tensor)  # Get the mel spectrogram.
+            embeddings = self.model.encoder(mel).cpu().numpy()  # Compute embeddings.
+            batch["whisper_embeddings"] = embeddings
+
+        return batch
+
+
+def whisper_embeddings(audio_chunk):
+    model = whisper.load_model("base")  # Can be "small", "medium", etc.
+
+    sample = np.array(audio_chunk.get_array_of_samples()).astype(np.float32)
+    max_value = float(2 ** (audio_chunk.sample_width * 8 - 1))
+    sample = sample / max_value
+
+    audio_tensor = torch.tensor(sample).unsqueeze(0)
+
+    with torch.no_grad():
+        mel = whisper.log_mel_spectrogram(audio_tensor)  # Get the mel spectrogram.
+        embeddings = model.encoder(mel)  # Compute embeddings.
+
+    return embeddings
+
+
 
 
 token = os.environ["HF_TOKEN"]
@@ -114,8 +176,32 @@ materialized_ds = ds.materialize()
 # audio_objects = extract_audio_objects_from_tar(raw)
 
 new_ds = materialized_ds.flat_map(process_tarfile)
-new_ds = new_ds.map(set_sampling_rate)
+new_ds = new_ds.map(set_sampling_rate_and_channels)
 new_ds = new_ds.materialize()
 
 result_ds = new_ds.flat_map(chunk_audio)
+result_ds = result_ds.map(audio_to_numpy)
 result_ds = result_ds.materialize()
+
+ds_with_embeddings = result_ds.map_batches(
+    WhisperPredictor,
+    # Four workers with one GPU each
+    concurrency=4,
+    batch_size=16,
+    num_gpus=1
+)
+ds_with_embeddings = ds_with_embeddings.materialize()
+
+
+# TESTING EMBEDDINGS
+
+name = 'betv-16557frankmooreup-e576-collection24/betv-16557frankmooreup-e576-collection24.mp3_chunk_150'
+row = ds_with_embeddings.filter(lambda row: row["filename"] == name).take(1)[0]
+e = row["whisper_embeddings"]
+def dot_product(row):
+    row["dot_product"] = np.sum(e * row["whisper_embeddings"]) / (np.linalg.norm(row["whisper_embeddings"]) * np.linalg.norm(e))
+    return row
+dot_ds = ds_with_embeddings.map(dot_product)
+max_dot_product = dot_ds.filter(lambda row: row["filename"] != name).max("dot_product")
+max_dot_product_row = dot_ds.filter(lambda row: row["dot_product"] == max_dot_product).take(1)[0]
+max_dot_product_row["filename"]  # Should sound similar to `name`
