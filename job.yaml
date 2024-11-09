@@ -1,0 +1,25 @@
+# check out job reference for all supported fields: https://docs.anyscale.com/reference/job-api#jobconfig
+
+name: load-audio
+image_uri: anyscale/image/audio:4
+compute_config:
+  head_node:
+    instance_type: m5.2xlarge
+    # advanced_instance_config: # (Optional) Defaults to no advanced configurations.
+    #   CPU: 0
+    #   GPU: 0
+  worker_nodes:
+    - instance_type: m5.24xlarge
+      min_nodes: 0
+      max_nodes: 64
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: g4dn.12xlarge
+      min_nodes: 0
+      max_nodes: 64
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+# choose which directory to upload to Anyscale 
+working_dir: .
+# use the default Anyscale Cloud in your organization when empty
+cloud:
+entrypoint: python load_audio.py
+max_retries: 0

@@ -21,6 +21,7 @@ MP3S_PER_TAR_LIMIT = None  # None for unlimited, e.g., 10 for a small value
 
 ray.data.DataContext.get_current().retried_io_errors.append("OSError 429 Client Error: Too Many Requests for url")
 ray.data.DataContext.get_current().retried_io_errors.append("HfHubHTTPError: 429 Client Error: Too Many Requests for url")
+ray.data.DataContext.get_current().retried_io_errors.append("HTTPError: 429 Client Error: Too Many Requests for url")
 
 
 def retrieve_hf_data_files(dataset_name, split=None, revision=None, data_dir=None, data_files=None, token=None):
@@ -171,7 +172,7 @@ ds = ds.map(audio_to_numpy)
 
 ds = ds.map_batches(
     WhisperPredictor,
-    concurrency=4,
+    concurrency=16,
     batch_size=16,
     num_gpus=1
 )
