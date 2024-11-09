@@ -2,7 +2,7 @@ from typing import Dict
 import ray
 import datasets
 import os
-from huggingface_hub import HfFileSystem, HfApi, DatasetCardData
+from huggingface_hub import HfFileSystem, HfApi, DatasetCardData, errors
 import requests
 import tarfile
 import io
@@ -14,6 +14,14 @@ import whisper
 SAMPLING_RATE = 16000
 CHUNK_SIZE_SECONDS = 30
 NUM_CHANNELS = 1
+
+# Limit scale (just for development to run the script faster)
+AUDIO_FILE_LIMIT = None  # None for unlimited, e.g., 2 for a small value
+MP3S_PER_TAR_LIMIT = None  # None for unlimited, e.g., 10 for a small value
+
+ray.data.DataContext.get_current().retried_io_errors.append("OSError 429 Client Error: Too Many Requests for url")
+ray.data.DataContext.get_current().retried_io_errors.append("HfHubHTTPError: 429 Client Error: Too Many Requests for url")
+
 
 def retrieve_hf_data_files(dataset_name, split=None, revision=None, data_dir=None, data_files=None, token=None):
     hfh_dataset_info = HfApi("https://huggingface.co").dataset_info(
@@ -54,17 +62,10 @@ def extract_audio_objects_from_tar(tarfile_bytes):
     audio_objects = []
     filenames = []
 
-    counter = 0
-
     # Open the byte string as a tar file
     with tarfile.open(fileobj=io.BytesIO(tarfile_bytes)) as tar:
         # Iterate through each file in the tar archive
         for member in tar.getmembers():
-
-            if counter == 10:
-                break
-            counter += 1
-
             # Check if the file is an MP3
             if member.isfile() and member.name.endswith(".mp3"):
                 try:
@@ -77,6 +78,9 @@ def extract_audio_objects_from_tar(tarfile_bytes):
                     print(f"Ignoring: {member.name} (Could not decode)")
             else:
                 print(f"Ignoring: {member.name} (Not mp3)")
+
+            if MP3S_PER_TAR_LIMIT and len(audio_objects) == MP3S_PER_TAR_LIMIT:
+                break
 
     return [{"audio": audio, "filename": filename} for audio, filename in zip(audio_objects, filenames)]
 
@@ -143,58 +147,39 @@ class WhisperPredictor:
         return batch
 
 
-def whisper_embeddings(audio_chunk):
-    model = whisper.load_model("base")  # Can be "small", "medium", etc.
-
-    sample = np.array(audio_chunk.get_array_of_samples()).astype(np.float32)
-    max_value = float(2 ** (audio_chunk.sample_width * 8 - 1))
-    sample = sample / max_value
-
-    audio_tensor = torch.tensor(sample).unsqueeze(0)
-
-    with torch.no_grad():
-        mel = whisper.log_mel_spectrogram(audio_tensor)  # Get the mel spectrogram.
-        embeddings = model.encoder(mel)  # Compute embeddings.
-
-    return embeddings
-
-
-
-
 token = os.environ["HF_TOKEN"]
 dataset_name, data_dir, split = "MLCommons/unsupervised_peoples_speech", None, "train"
 data_files = retrieve_hf_data_files(dataset_name, data_dir=data_dir, split=split)
 
+
 ds = ray.data.read_binary_files(
-    data_files[:2],
+    data_files[:AUDIO_FILE_LIMIT],
     filesystem=HfFileSystem(token=token),
+    ray_remote_args={
+        "memory": 8 * 10**9,  # Reserve roughly 8GB per reader.
+        "retry_exceptions": [errors.HfHubHTTPError],
+        "max_retries": -1,  # Retry infinitely.
+    },
 )
 
-materialized_ds = ds.materialize()
-# info = ds.take_all()
-# raw = info[0]["bytes"]
-# audio_objects = extract_audio_objects_from_tar(raw)
 
-new_ds = materialized_ds.flat_map(process_tarfile)
-new_ds = new_ds.map(set_sampling_rate_and_channels)
-new_ds = new_ds.materialize()
+ds = ds.flat_map(process_tarfile)
+ds = ds.map(set_sampling_rate_and_channels)
 
-result_ds = new_ds.flat_map(chunk_audio)
-result_ds = result_ds.map(audio_to_numpy)
-result_ds = result_ds.materialize()
+ds = ds.flat_map(chunk_audio)
+ds = ds.map(audio_to_numpy)
 
-ds_with_embeddings = result_ds.map_batches(
+ds = ds.map_batches(
     WhisperPredictor,
-    # Four workers with one GPU each
     concurrency=4,
     batch_size=16,
     num_gpus=1
 )
-ds_with_embeddings = ds_with_embeddings.materialize()
 
+print("COUNT", ds.count())
 
 # TESTING EMBEDDINGS
-
+"""
 name = 'betv-16557frankmooreup-e576-collection24/betv-16557frankmooreup-e576-collection24.mp3_chunk_150'
 row = ds_with_embeddings.filter(lambda row: row["filename"] == name).take(1)[0]
 e = row["whisper_embeddings"]
@@ -205,3 +190,4 @@ dot_ds = ds_with_embeddings.map(dot_product)
 max_dot_product = dot_ds.filter(lambda row: row["filename"] != name).max("dot_product")
 max_dot_product_row = dot_ds.filter(lambda row: row["dot_product"] == max_dot_product).take(1)[0]
 max_dot_product_row["filename"]  # Should sound similar to `name`
+"""
