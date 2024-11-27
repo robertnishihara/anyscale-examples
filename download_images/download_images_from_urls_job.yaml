@@ -1,0 +1,21 @@
+name: download-images-from-urls
+image_uri: anyscale/image/audio:4
+compute_config:
+  head_node:
+    instance_type: m5.2xlarge
+    # advanced_instance_config: # (Optional) Defaults to no advanced configurations.
+    #   CPU: 0
+    #   GPU: 0
+  worker_nodes:
+    - instance_type: m5.24xlarge
+      min_nodes: 0
+      max_nodes: 500
+    - instance_type: m5.16xlarge
+      min_nodes: 0
+      max_nodes: 100
+# choose which directory to upload to Anyscale 
+working_dir: .
+# use the default Anyscale Cloud in your organization when empty
+cloud: anyscale_v2_default_cloud
+entrypoint: python download_images_from_urls.py
+max_retries: 0
