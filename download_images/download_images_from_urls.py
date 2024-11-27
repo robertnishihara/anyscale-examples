@@ -71,7 +71,7 @@ data_files = retrieve_hf_data_files(dataset_name, data_dir=data_dir, split=split
 data_files = [f for f in data_files if f.endswith("parquet")]  # Just parquet files.
 
 ds = ray.data.read_parquet(
-    data_files[:1],
+    data_files,
     filesystem=HfFileSystem(), # (token=token),
 )
 ds = ds.map_batches(download_images)
