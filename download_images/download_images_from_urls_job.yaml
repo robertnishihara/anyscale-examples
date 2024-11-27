@@ -7,12 +7,9 @@ compute_config:
     #   CPU: 0
     #   GPU: 0
   worker_nodes:
-    - instance_type: m5.24xlarge
+    - instance_type: m5.xlarge
       min_nodes: 0
-      max_nodes: 500
-    - instance_type: m5.16xlarge
-      min_nodes: 0
-      max_nodes: 100
+      max_nodes: 4000
 # choose which directory to upload to Anyscale 
 working_dir: .
 # use the default Anyscale Cloud in your organization when empty
