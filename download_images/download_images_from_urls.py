@@ -75,6 +75,5 @@ ds = ray.data.read_parquet(
     filesystem=HfFileSystem(), # (token=token),
 )
 ds = ds.map_batches(download_images)
+ds = ds.filter(lambda row: row["success"])
 ds.write_parquet(os.path.join(os.environ["ANYSCALE_ARTIFACT_STORAGE"], "open-images-downloaded"))
-print("XXX")
-print(ds.count())
