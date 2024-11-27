@@ -5,6 +5,7 @@ import os
 from huggingface_hub import HfFileSystem, HfApi, DatasetCardData, errors
 import requests
 import io
+import time
 
 
 def retrieve_hf_data_files(dataset_name, split=None, revision=None, data_dir=None, data_files=None, token=None):
@@ -59,6 +60,7 @@ def download_images(batch):
 
         images.append(response.content)
         success.append(True)
+        time.sleep(0.2)  # Try to avoid getting rate limited.
 
     batch["images"] = images
     batch["success"] = success
