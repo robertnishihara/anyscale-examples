@@ -1,0 +1,84 @@
+# check out job reference for all supported fields: https://docs.anyscale.com/reference/job-api#jobconfig
+
+name: load-audio
+
+
+image_uri: anyscale/image/audio-attempt-2:1
+# containerfile: |
+#   FROM anyscale/ray:nightly-py312-cu123
+# 
+#   RUN mkdir -p /home/ray/default
+# 
+#   RUN python3 -m pip install --no-cache-dir "datasets" "huggingface_hub" "pydub" "openai-whisper" "transformers" "torchaudio"
+# 
+#   RUN sudo apt update -y
+#   RUN sudo apt install -y ffmpeg
+
+
+compute_config:
+  head_node:
+    instance_type: m5.2xlarge
+    # advanced_instance_config: # (Optional) Defaults to no advanced configurations.
+    #   CPU: 0
+    #   GPU: 0
+  worker_nodes:
+    - instance_type: m5.12xlarge
+      max_nodes: 500
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: m5.16xlarge
+      max_nodes: 500
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: m5.24xlarge
+      max_nodes: 500
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: m7a.24xlarge
+      max_nodes: 500
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: m7a.16xlarge
+      max_nodes: 500
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: m7a.12xlarge
+      max_nodes: 500
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: m6a.24xlarge
+      max_nodes: 500
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: m6a.16xlarge
+      max_nodes: 500
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: m6a.12xlarge
+      max_nodes: 500
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: c7i.24xlarge
+      max_nodes: 500
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: c7i.16xlarge
+      max_nodes: 500
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: c7i.12xlarge
+      max_nodes: 500
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: g4dn.12xlarge
+      min_nodes: 0
+      max_nodes: 100
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: g4dn.8xlarge
+      min_nodes: 0
+      max_nodes: 100
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: g4dn.4xlarge
+      min_nodes: 0
+      max_nodes: 100
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: g4dn.2xlarge
+      min_nodes: 0
+      max_nodes: 100
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+  min_resources:
+    CPU: 10000
+# choose which directory to upload to Anyscale 
+working_dir: .
+# use the default Anyscale Cloud in your organization when empty
+cloud: anyscale_v2_default_cloud
+entrypoint: python load_audio.py
+max_retries: 0
