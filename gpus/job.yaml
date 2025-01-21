@@ -1,0 +1,18 @@
+cloud: robert-gpu-cloud
+
+compute_config:
+  head_node:
+    instance_type: m5.8xlarge
+  worker_nodes:
+  - instance_type: brev-8xH100
+    cloud_deployment:
+      machine_pool: brev-gpus
+    min_nodes: 2
+    max_nodes: 2
+  flags:
+    enable_snapshotter_ext4_image: true
+    use_anyscale_managed_overlay_network: true
+
+working_dir: .
+entrypoint: python validate_gpus.py --num-gpus=16 --gpu-type=H100
+max_retries: 0
