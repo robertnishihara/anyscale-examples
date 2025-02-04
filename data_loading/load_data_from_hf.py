@@ -1,9 +1,7 @@
-from typing import Any, Dict, List
 import ray
 import datasets
-import numpy as np
 import os
-from huggingface_hub import HfFileSystem, HfApi, DatasetCardData, errors
+from huggingface_hub import HfFileSystem
 
 
 dataset_infos = {
@@ -11,6 +9,7 @@ dataset_infos = {
     "HuggingFaceFV/finevideo": ("data", "train", "parquet"),
     "HuggingFaceFW/fineweb-2": ("data", "train", "parquet"),
     "wikimedia/wikipedia": (None, "train", "parquet"),
+    "permutans/wdc-common-crawl-embedded-jsonld": (None, "train", "parquet"),
     "nvidia/OpenMathInstruct-2": (None, "train", "parquet"),
     "HuggingFaceFW/fineweb": ("data", "train", "parquet"),
     "HuggingFaceTB/cosmopedia": ("data", "train", "parquet"),
@@ -50,20 +49,16 @@ FILE_LIMIT = None  # None for unlimited, e.g., 2 for a small value
 ray.data.DataContext.get_current().retried_io_errors.append("429 Client Error: Too Many Requests for url")
 
 
-def retrieve_hf_data_files(dataset_name, data_dir=None, token=None):
-    # If you are unsure what the data_dir should be, run something like
-    #     HfFileSystem(token=token).ls(base_path)
-    base_path = f"hf://datasets/{dataset_name}/{data_dir or ''}".rstrip("/")
-    patterns = datasets.data_files.get_data_patterns(base_path)
-    data_files = datasets.data_files.DataFilesDict.from_patterns(
-        patterns,
-        base_path=base_path,
-        allowed_extensions=datasets.load.ALL_ALLOWED_EXTENSIONS,
-    )
-    return data_files
+# If you are unsure what the data_dir should be, run: HfFileSystem(token=token).ls(base_path)
+base_path = f"hf://datasets/{dataset_name}/{data_dir or ''}".rstrip("/")
+patterns = datasets.data_files.get_data_patterns(base_path)
+data_files_with_splits = datasets.data_files.DataFilesDict.from_patterns(
+    patterns,
+    base_path=base_path,
+    allowed_extensions=datasets.load.ALL_ALLOWED_EXTENSIONS,
+)
+data_files = data_files_with_splits[split]
 
-
-data_files = retrieve_hf_data_files(dataset_name, data_dir=data_dir)[split]
 
 if file_format == "parquet":
     ds = ray.data.read_parquet(
