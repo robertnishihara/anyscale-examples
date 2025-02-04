@@ -65,10 +65,24 @@ def retrieve_hf_data_files(dataset_name, data_dir=None, token=None):
 
 data_files = retrieve_hf_data_files(dataset_name, data_dir=data_dir)[split]
 
-ds = ray.data.read_parquet(
-    data_files[:FILE_LIMIT],
-    filesystem=HfFileSystem(token=token),
-)
+if file_format == "parquet":
+    ds = ray.data.read_parquet(
+        data_files[:FILE_LIMIT],
+        filesystem=HfFileSystem(token=token),
+    )
+elif file_format == "json":
+    ds = ray.data.read_json(
+        data_files[:FILE_LIMIT],
+        filesystem=HfFileSystem(token=token),
+    )   
+elif file_format == "binary":
+    ds = ray.data.read_binary(
+        data_files[:FILE_LIMIT],
+        filesystem=HfFileSystem(token=token),
+    )      
+else:
+    raise Exception("Unsupported file format.")
+
 ds = ds.materialize()
 
 print(f"Success! Count is {ds.count()}.")
