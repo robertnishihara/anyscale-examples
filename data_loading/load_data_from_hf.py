@@ -24,16 +24,16 @@ dataset_infos = {
     "HuggingFaceM4/OBELICS": ("data", "train", "parquet"),
     "rotten_tomatoes": (None, "train", "parquet"),
 
-    # Binary
-    "mozilla-foundation/common_voice_17_0": ("audio", "train", "binary"),  # .tar
-    "PolyAI/minds14": ("data", "train", "binary"),  # .zip
-    "facebook/multilingual_librispeech": ("data", "train", "binary"),  # .tar.gz
-
     # Json
     "allenai/c4": (None, "train", "json"),  # .json.gz
     "teknium/OpenHermes-2.5": (None, "train", "json"),  # .json
     "rombodawg/Everything_Instruct_Multilingual": (None, "train", "json"),  # .json
     "databricks/databricks-dolly-15k": (None, "train", "json"),  # .jsonl
+
+    # Binary
+    "mozilla-foundation/common_voice_17_0": ("audio", "train", "binary"),  # .tar
+    "PolyAI/minds14": ("data", "train", "binary"),  # .zip
+    "facebook/multilingual_librispeech": ("data", "train", "binary"),  # .tar.gz
 }
 
 dataset_name = os.environ.get("DATASET_NAME")
@@ -47,7 +47,7 @@ token = os.environ["HF_TOKEN"]
 # Limit scale (just for development to run the script faster)
 FILE_LIMIT = None  # None for unlimited, e.g., 2 for a small value
 
-# ray.data.DataContext.get_current().retried_io_errors.append("429 Client Error: Too Many Requests for url")
+ray.data.DataContext.get_current().retried_io_errors.append("429 Client Error: Too Many Requests for url")
 
 
 def retrieve_hf_data_files(dataset_name, data_dir=None, token=None):
@@ -76,7 +76,7 @@ elif file_format == "json":
         filesystem=HfFileSystem(token=token),
     )   
 elif file_format == "binary":
-    ds = ray.data.read_binary(
+    ds = ray.data.read_binary_files(
         data_files[:FILE_LIMIT],
         filesystem=HfFileSystem(token=token),
     )      
