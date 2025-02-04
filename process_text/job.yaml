@@ -1,0 +1,15 @@
+# check out job reference for all supported fields: https://docs.anyscale.com/reference/job-api#jobconfig
+
+name: process-fineweb-2
+
+image_uri: anyscale/image/hf-with-vllm:1
+
+compute_config:
+  head_node:
+    instance_type: m5.2xlarge
+# choose which directory to upload to Anyscale 
+working_dir: .
+# use the default Anyscale Cloud in your organization when empty
+cloud: robert-gpu-cloud
+entrypoint: python process_text.py
+max_retries: 0
