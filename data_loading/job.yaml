@@ -2,11 +2,9 @@
 
 name: load-data-hf
 
-image_uri: anyscale/image/hf-with-vllm:1
+image_uri: anyscale/image/hf-with-vllm:5
 
 compute_config:
-  head_node:
-    instance_type: m5.2xlarge
   # min_resources:
   #   CPU: 10000
 # choose which directory to upload to Anyscale 
