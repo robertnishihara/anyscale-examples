@@ -1,0 +1,67 @@
+name: synthetic-image-generator
+
+image_uri: anyscale/ray:2.48.0-py312-cu128
+
+compute_config:
+  worker_nodes:
+    - instance_type: m5.12xlarge
+      max_nodes: 500
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: m5.16xlarge
+      max_nodes: 500
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: m5.24xlarge
+      max_nodes: 500
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: m7a.24xlarge
+      max_nodes: 500
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: m7a.16xlarge
+      max_nodes: 500
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: m7a.12xlarge
+      max_nodes: 500
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: m6a.24xlarge
+      max_nodes: 500
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: m6a.16xlarge
+      max_nodes: 500
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: m6a.12xlarge
+      max_nodes: 500
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: c7i.24xlarge
+      max_nodes: 500
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: c7i.16xlarge
+      max_nodes: 500
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: c7i.12xlarge
+      max_nodes: 500
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: g4dn.12xlarge
+      min_nodes: 0
+      max_nodes: 100
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: g4dn.8xlarge
+      min_nodes: 0
+      max_nodes: 100
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: g4dn.4xlarge
+      min_nodes: 0
+      max_nodes: 100
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+    - instance_type: g4dn.2xlarge
+      min_nodes: 0
+      max_nodes: 100
+      market_type: PREFER_SPOT # (Optional) Defaults to ON_DEMAND
+  min_resources:
+    CPU: 5000
+
+# choose which directory to upload to Anyscale 
+working_dir: .
+# use the default Anyscale Cloud in your organization when empty
+cloud: anyscale_v2_default_cloud
+entrypoint: python main.py
+max_retries: 0
